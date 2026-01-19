@@ -13,13 +13,12 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 # 0. CẤU HÌNH & HÀM HỖ TRỢ
 # ==========================================
 st.set_page_config(
-    page_title="Structure AI V21.1 (Stable Fix)",
+    page_title="Structure AI V21 (Final Perfect)",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Khởi tạo Session State
 if 'current_floor_idx' not in st.session_state:
     st.session_state.current_floor_idx = 0
 
@@ -28,12 +27,14 @@ st.markdown("""
 <style>
     .main-header { font-size:24px; font-weight: bold; color: #154360; border-bottom: 3px solid #2E86C1; padding-bottom: 8px; margin-bottom: 20px; text-transform: uppercase; }
     .sub-header { font-size:16px; font-weight: bold; color: #2C3E50; margin-top: 15px; margin-bottom: 5px; }
+    .report-title { text-align: center; font-size: 28px; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
+    .report-sub { text-align: center; font-size: 16px; color: #7f8c8d; margin-bottom: 30px; font-style: italic; }
     div[data-testid="stExpander"] details summary p { font-weight: bold; font-size: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- REPORT ENGINE (Word không chứa ảnh để đảm bảo ổn định) ---
-def create_docx_report(project_name, project_type, mat_info, load_info, design_results, mong_desc):
+# --- HÀM TẠO FILE WORD (REPORT ENGINE) ---
+def create_docx_report(project_name, project_type, mat_info, load_info, design_results):
     doc = Document()
     style = doc.styles['Normal']
     font = style.font
@@ -41,7 +42,7 @@ def create_docx_report(project_name, project_type, mat_info, load_info, design_r
     font.size = Pt(12)
 
     # Header
-    head = doc.add_heading('THUYẾT MINH TÍNH TOÁN KẾT CẤU SƠ BỘ', 0)
+    head = doc.add_heading(f'THUYẾT MINH TÍNH TOÁN KẾT CẤU SƠ BỘ', 0)
     head.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p = doc.add_paragraph(f"DỰ ÁN: {project_name.upper()}")
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -50,12 +51,7 @@ def create_docx_report(project_name, project_type, mat_info, load_info, design_r
 
     # 1. Tiêu chuẩn
     doc.add_heading('I. CÁC TIÊU CHUẨN ÁP DỤNG', level=1)
-    stds = [
-        "TCVN 2737:2023: Tải trọng và tác động - Tiêu chuẩn thiết kế.",
-        "TCVN 5574:2018: Kết cấu bê tông và bê tông cốt thép - Tiêu chuẩn thiết kế.",
-        "TCVN 9386:2012: Thiết kế công trình chịu động đất.",
-        "TCVN 10304:2014: Móng cọc - Tiêu chuẩn thiết kế."
-    ]
+    stds = ["TCVN 2737:2023: Tải trọng và tác động", "TCVN 5574:2018: Kết cấu bê tông cốt thép", "TCVN 9386:2012: Thiết kế kháng chấn", "TCVN 10304:2014: Móng cọc"]
     for s in stds: doc.add_paragraph(s, style='List Bullet')
 
     # 2. Vật liệu
@@ -65,43 +61,34 @@ def create_docx_report(project_name, project_type, mat_info, load_info, design_r
     doc.add_paragraph(f"3. Tải trọng sàn quy đổi: q = {load_info} kN/m2")
 
     # 3. Kết quả
-    doc.add_heading('III. KẾT QUẢ TÍNH TOÁN & LỰA CHỌN', level=1)
+    doc.add_heading('III. KẾT QUẢ TÍNH TOÁN', level=1)
     
     def add_df(df, title):
         doc.add_heading(title, level=2)
         if df.empty:
             doc.add_paragraph("Không áp dụng")
             return
-        # Tạo bảng Word
         t = doc.add_table(df.shape[0]+1, df.shape[1])
         t.style = 'Table Grid'
-        # Header
-        for j, col in enumerate(df.columns): 
-            t.cell(0, j).text = str(col)
-        # Body
+        for j, col in enumerate(df.columns): t.cell(0, j).text = str(col)
         for i, row in enumerate(df.itertuples(index=False)):
-            for j, val in enumerate(row): 
-                t.cell(i+1, j).text = str(val)
-        doc.add_paragraph("") # Dòng trống
+            for j, val in enumerate(row): t.cell(i+1, j).text = str(val)
+        doc.add_paragraph("")
 
     add_df(design_results['San'], "1. Sàn (Slab)")
     add_df(design_results['Dam'], "2. Dầm (Beam)")
     add_df(design_results['Cot'], "3. Cột (Column)")
     if 'Vach' in design_results: add_df(design_results['Vach'], "4. Vách (Wall)")
-    
-    doc.add_heading('5. Móng (Foundation)', level=2)
-    doc.add_paragraph(f"Phương án móng: {mong_desc}")
-    add_df(design_results['Mong'], "Chi tiết móng:")
+    add_df(design_results['Mong'], "5. Móng (Foundation)")
 
     doc.add_heading('IV. KẾT LUẬN', level=1)
-    doc.add_paragraph("Phương án kết cấu sơ bộ đảm bảo khả năng chịu lực. Cần kiểm toán chi tiết trong giai đoạn TKKT.")
+    doc.add_paragraph("Phương án đảm bảo khả năng chịu lực sơ bộ. Cần kiểm toán chi tiết trong giai đoạn TKKT.")
     
-    # Lưu vào bộ nhớ đệm
     bio = io.BytesIO()
     doc.save(bio)
     return bio.getvalue()
 
-# --- CÁC HÀM HỖ TRỢ KHÁC ---
+# Hàm hỗ trợ khác
 def color_status(val):
     color = 'red'
     if val == '✅ ĐẠT': color = 'green'
@@ -123,11 +110,6 @@ def parse_input_string(input_str):
     except:
         return []
 
-def get_material_properties(grade_conc, grade_steel):
-    rb_map = {"B20": 11.5, "B25": 14.5, "B30": 17.0, "B35": 19.5, "B40": 22.0, "B45": 25.0}
-    rs_map = {"CB240-T": 210, "CB300-V": 260, "CB400-V": 350, "CB500-V": 435}
-    return rb_map.get(grade_conc, 14.5), rs_map.get(grade_steel, 350)
-
 def to_excel(dfs):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -139,7 +121,7 @@ def to_excel(dfs):
                 worksheet.set_column(i, i, col_len)
     return output.getvalue()
 
-# Dữ liệu chuẩn
+# Data chuẩn
 RB_MAP = {"B15": 8.5, "B20": 11.5, "B25": 14.5, "B30": 17.0, "B35": 19.5, "B40": 22.0, "B45": 25.0, "B50": 27.5}
 RS_MAP = {"CB240-T": 210, "CB300-T": 260, "CB300-V": 260, "CB400-V": 350, "CB500-V": 435, "CB600-V": 520}
 Q_DEFAULTS = {"Nhà phố/Biệt thự": 10.0, "Văn phòng/Khách sạn": 14.0, "Chung cư cao tầng": 14.5}
@@ -196,7 +178,6 @@ with st.sidebar:
             conc_grade = conc_sel
             st.caption(f"Rb = {rb} MPa")
         
-        st.markdown("---")
         main_steel_opts = list(RS_MAP.keys()) + ["Tùy chỉnh..."]
         main_steel_sel = st.selectbox("Thép chủ (Main Bar)", main_steel_opts, index=3)
         if main_steel_sel == "Tùy chỉnh...":
@@ -216,7 +197,6 @@ with st.sidebar:
             rsw = RS_MAP[stir_sel]
             steel_stirrup = stir_sel
         
-        st.markdown("---")
         q_load = st.number_input("Tải trọng sàn (kN/m2)", value=default_q)
 
     with st.expander("4. Cấu Kiện Cột", expanded=False):
@@ -243,14 +223,12 @@ with st.sidebar:
             r_dat = st.number_input("Cường độ đất nền R (kg/cm2)", 0.5, 10.0, 1.5)
 
 # ==========================================
-# 2. CALCULATION ENGINE
+# 2. ENGINE (FIXED LOOP)
 # ==========================================
-# Sàn
 hs_calc = (l_min * 1000) / 35
 hs_select = max(100, math.ceil(hs_calc / 10) * 10)
 df_slab = pd.DataFrame([{"Cấu kiện": "Sàn điển hình", "Hoạt tải (kN/m2)": q_load, "Nhịp ngắn L (m)": l_min, "Công thức": "L/35", "Chiều dày YC (mm)": hs_calc, "Chiều dày CHỌN (mm)": int(hs_select), "Hệ số AT": hs_select/hs_calc if hs_calc else 0, "Trạng thái": "✅ ĐẠT" if hs_select >= hs_calc else "⛔ KHÔNG ĐẠT"}])
 
-# Dầm
 hd_calc = (l_max * 1000) / 12; hd_select = math.ceil(hd_calc / 50) * 50
 bd_calc = 0.4 * hd_select; bd_select = max(200, math.ceil(bd_calc / 50) * 50)
 if hd_select >= 700 and bd_select < 300: bd_select = 300
@@ -261,7 +239,7 @@ df_beam = pd.DataFrame([
     {"Cấu kiện": "Dầm phụ", "Nhịp lớn L (m)": l_max, "Công thức": "L/16", "Chiều cao YC (mm)": hd_sec, "Tiết diện CHỌN (mm)": f"{int(bd_sec_s)}x{int(hd_sec_s)}", "Hệ số AT": hd_sec_s/hd_sec if hd_sec else 0, "Trạng thái": "✅ ĐẠT"}
 ])
 
-# Cột - Fix lỗi NULL bằng vòng lặp chuẩn
+# FIX: Vòng lặp chuẩn, không dùng list comprehension để tránh in NULL
 col_schedule = []
 floors = list(range(1, num_floors + 1))[::-1]
 group_map = {}
@@ -285,14 +263,12 @@ for grp_id in sorted(group_map.keys(), reverse=True):
     col_schedule.append({"Vị trí": f"Tầng {min(floor_list)}-{max(floor_list)}", "Tải N (kN)": N_calc, "A_yc (cm2)": Ac_req/100, "Tiết diện": f"{int(b_sel)}x{int(h_sel)}", "A_chon (cm2)": int(b_sel*h_sel/100), "Ratio": (b_sel*h_sel)/Ac_req if Ac_req else 0, "Trạng thái": status})
 df_col = pd.DataFrame(col_schedule).iloc[::-1].reset_index(drop=True)
 
-# Vách
 df_wall = pd.DataFrame()
 if has_shearwall:
     h_max = max(floor_heights) if floor_heights else 3.3
     tw_calc = h_max * 1000 / 20; tw_select = max(200, math.ceil(tw_calc / 50) * 50)
     df_wall = pd.DataFrame([{"Cấu kiện": "Vách cứng điển hình", "Chiều cao tầng H (m)": h_max, "Công thức": "H/20", "Chiều dày YC (mm)": tw_calc, "Chiều dày CHỌN (mm)": int(tw_select), "Hệ số AT": tw_select/tw_calc if tw_calc else 0, "Trạng thái": "✅ ĐẠT"}])
 
-# Móng
 N_footing = df_col.iloc[-1]["Tải N (kN)"] * 1.1 if not df_col.empty else 0
 mong_desc = ""; mong_detail = ""
 if found_type == "Móng Cọc (Pile)":
@@ -310,19 +286,20 @@ data_collection = {"San": df_slab, "Dam": df_beam, "Cot": df_col, "Mong": df_fou
 if not df_wall.empty: data_collection["Vach"] = df_wall
 
 # ==========================================
-# 3. GLOBAL GRAPHICS GENERATION
+# 3. UI
 # ==========================================
+st.title(f"📐 {project_name.upper()}")
+st.markdown(f"**Loại:** {project_type} | **Vật liệu:** BT {conc_grade} (Rb={rb}), Thép {steel_main} (Rs={rs})")
+
+tab1, tab2 = st.tabs(["📊 BẢN VẼ & BẢNG TÍNH", "📝 THUYẾT MINH"])
+
+# FIX: Vòng lặp chuẩn cho Graphics
 cum_x = [0]; grid_labels_x = ["1"]
 for i, val in enumerate(lx_list): cum_x.append(cum_x[-1] + val); grid_labels_x.append(str(i + 2))
 cum_y = [0]; grid_labels_y = ["A"]
 for i, val in enumerate(ly_list): cum_y.append(cum_y[-1] + val); grid_labels_y.append(chr(65 + i + 1))
 cum_z = [0]; level_labels = ["Móng"]
 for i, val in enumerate(floor_heights): cum_z.append(cum_z[-1] + val); level_labels.append(f"Tầng {i+1}" if i < len(floor_heights)-1 else "Mái")
-
-if st.session_state.current_floor_idx >= len(floor_heights): st.session_state.current_floor_idx = len(floor_heights) - 1
-if st.session_state.current_floor_idx < 0: st.session_state.current_floor_idx = 0
-current_z = cum_z[st.session_state.current_floor_idx + 1]
-current_label = level_labels[st.session_state.current_floor_idx + 1]
 
 if not df_col.empty:
     c_dim = df_col.iloc[0]["Tiết diện"].split('x')
@@ -333,49 +310,10 @@ if not df_col.empty:
         else: bc_m, hc_m = min(dim1, dim2), max(dim1, dim2)
 else: bc_m = hc_m = 0.2
 
-# 3.1 DRAW PLAN
-fig_plan = go.Figure()
-for x, label in zip(cum_x, grid_labels_x):
-    fig_plan.add_trace(go.Scatter(x=[x, x], y=[min(cum_y)-1, max(cum_y)+1], mode='lines+text', line=dict(color='#BDC3C7', width=1, dash='dash'), text=[None, label], textposition="top center", hoverinfo='skip'))
-    fig_plan.add_trace(go.Scatter(x=[x], y=[min(cum_y)-1], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False, hoverinfo='skip'))
-for y, label in zip(cum_y, grid_labels_y):
-    fig_plan.add_trace(go.Scatter(x=[min(cum_x)-1, max(cum_x)+1], y=[y, y], mode='lines+text', line=dict(color='#BDC3C7', width=1, dash='dash'), text=[None, label], textposition="middle right", hoverinfo='skip'))
-    fig_plan.add_trace(go.Scatter(x=[min(cum_x)-1], y=[y], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False, hoverinfo='skip'))
-bx, by = [], []
-for y in cum_y: bx.extend([min(cum_x), max(cum_x), None]); by.extend([y, y, None])
-for x in cum_x: bx.extend([x, x, None]); by.extend([min(cum_y), max(cum_y), None])
-fig_plan.add_trace(go.Scatter(x=bx, y=by, mode='lines', line=dict(color='#2980B9', width=3), name='Dầm', hoverinfo='text'))
-shapes = []
-for x in cum_x:
-    for y in cum_y: shapes.append(dict(type="rect", x0=x-bc_m/2, y0=y-hc_m/2, x1=x+bc_m/2, y1=y+hc_m/2, fillcolor="#E74C3C", line=dict(width=0)))
-fig_plan.update_layout(shapes=shapes, xaxis=dict(visible=False, fixedrange=False, range=[min(cum_x)-2, max(cum_x)+2]), yaxis=dict(visible=False, scaleanchor="x", fixedrange=False, range=[min(cum_y)-2, max(cum_y)+2]), margin=dict(l=10,r=10,t=10,b=10), height=500, dragmode="pan", showlegend=False, title="MẶT BẰNG KẾT CẤU")
-
-# 3.2 DRAW ELEVATION
-fig_elev = go.Figure()
-x_min, x_max = min(cum_x) - 1, max(cum_x) + 1
-for i, z in enumerate(cum_z):
-    label = level_labels[i]
-    line_color = '#7F8C8D'; line_width = 1
-    fig_elev.add_trace(go.Scatter(x=[x_min, x_max + 1.5], y=[z, z], mode='lines', line=dict(color=line_color, width=line_width, dash='dot'), hoverinfo='skip'))
-    marker_x = x_max + 1.5
-    fig_elev.add_trace(go.Scatter(x=[marker_x], y=[z], mode='markers', marker=dict(symbol='triangle-down', size=15, color=line_color, line=dict(width=1, color=line_color)), hoverinfo='skip', showlegend=False))
-    fig_elev.add_trace(go.Scatter(x=[marker_x], y=[z + 0.2], mode='text', text=[f"{label} (+{z:.2f})"], textposition="top center", textfont=dict(color=line_color, size=12), hoverinfo='skip', showlegend=False))
-for x, label in zip(cum_x, grid_labels_x):
-    fig_elev.add_trace(go.Scatter(x=[x, x], y=[-1, max(cum_z)+1], mode='lines', line=dict(color='#BDC3C7', width=1, dash='dash'), showlegend=False, hoverinfo='skip'))
-    fig_elev.add_trace(go.Scatter(x=[x], y=[-1.5], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False))
-shapes_elev = []
-for x in cum_x: shapes_elev.append(dict(type="rect", x0=x-bc_m/2, y0=0, x1=x+bc_m/2, y1=max(cum_z), fillcolor="#BDC3C7", opacity=0.5, line=dict(width=0)))
-for z in cum_z[1:]:
-    for j in range(len(cum_x)-1): shapes_elev.append(dict(type="rect", x0=cum_x[j], y0=z-0.5, x1=cum_x[j+1], y1=z, fillcolor="#3498DB", opacity=0.5, line=dict(width=0)))
-fig_elev.update_layout(shapes=shapes_elev, xaxis=dict(visible=False, fixedrange=False, range=[x_min-1, x_max+4]), yaxis=dict(visible=False, scaleanchor="x", fixedrange=False, range=[-2, max(cum_z)+2]), margin=dict(l=10,r=10,t=10,b=10), height=500, dragmode="pan", showlegend=False, title="MẶT ĐỨNG KHUNG")
-
-# ==========================================
-# 4. MAIN APP UI
-# ==========================================
-st.title(f"📐 {project_name.upper()}")
-st.markdown(f"**Loại:** {project_type} | **Vật liệu:** BT {conc_grade} (Rb={rb}), Thép {steel_main} (Rs={rs})")
-
-tab1, tab2 = st.tabs(["📊 BẢN VẼ & BẢNG TÍNH", "📝 THUYẾT MINH"])
+if st.session_state.current_floor_idx >= len(floor_heights): st.session_state.current_floor_idx = len(floor_heights) - 1
+if st.session_state.current_floor_idx < 0: st.session_state.current_floor_idx = 0
+current_z = cum_z[st.session_state.current_floor_idx + 1]
+current_label = level_labels[st.session_state.current_floor_idx + 1]
 
 with tab1:
     c_nav1, c_nav2, c_nav3 = st.columns([1, 2, 1])
@@ -388,8 +326,49 @@ with tab1:
             if st.session_state.current_floor_idx < len(floor_heights) - 1: st.session_state.current_floor_idx += 1; st.rerun()
 
     col_plan, col_elev = st.columns([1, 1])
-    with col_plan: st.plotly_chart(fig_plan, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
-    with col_elev: st.plotly_chart(fig_elev, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
+    with col_plan:
+        st.markdown(f'<p class="header-style">📍 PLAN VIEW</p>', unsafe_allow_html=True)
+        fig_plan = go.Figure()
+        for x, label in zip(cum_x, grid_labels_x):
+            fig_plan.add_trace(go.Scatter(x=[x, x], y=[min(cum_y)-1, max(cum_y)+1], mode='lines+text', line=dict(color='#BDC3C7', width=1, dash='dash'), text=[None, label], textposition="top center", hoverinfo='skip'))
+            fig_plan.add_trace(go.Scatter(x=[x], y=[min(cum_y)-1], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False, hoverinfo='skip'))
+        for y, label in zip(cum_y, grid_labels_y):
+            fig_plan.add_trace(go.Scatter(x=[min(cum_x)-1, max(cum_x)+1], y=[y, y], mode='lines+text', line=dict(color='#BDC3C7', width=1, dash='dash'), text=[None, label], textposition="middle right", hoverinfo='skip'))
+            fig_plan.add_trace(go.Scatter(x=[min(cum_x)-1], y=[y], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False, hoverinfo='skip'))
+        bx, by = [], []
+        for y in cum_y: bx.extend([min(cum_x), max(cum_x), None]); by.extend([y, y, None])
+        for x in cum_x: bx.extend([x, x, None]); by.extend([min(cum_y), max(cum_y), None])
+        fig_plan.add_trace(go.Scatter(x=bx, y=by, mode='lines', line=dict(color='#2980B9', width=3), name='Dầm', hoverinfo='text', hovertext=f"Dầm {int(bd_select)}x{int(hd_select)}"))
+        shapes = []
+        for x in cum_x:
+            for y in cum_y: shapes.append(dict(type="rect", x0=x-bc_m/2, y0=y-hc_m/2, x1=x+bc_m/2, y1=y+hc_m/2, fillcolor="#E74C3C", line=dict(width=0)))
+        fig_plan.update_layout(shapes=shapes, xaxis=dict(visible=False, fixedrange=False, range=[min(cum_x)-2, max(cum_x)+2]), yaxis=dict(visible=False, scaleanchor="x", fixedrange=False, range=[min(cum_y)-2, max(cum_y)+2]), margin=dict(l=10,r=10,t=10,b=10), height=500, dragmode="pan", showlegend=False)
+        st.plotly_chart(fig_plan, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
+
+    with col_elev:
+        st.markdown('<p class="header-style">📐 ELEVATION VIEW (TRỤC 1)</p>', unsafe_allow_html=True)
+        fig_elev = go.Figure()
+        x_min, x_max = min(cum_x) - 1, max(cum_x) + 1
+        for i, z in enumerate(cum_z):
+            label = level_labels[i]
+            is_active = (i == st.session_state.current_floor_idx + 1)
+            line_color = '#E74C3C' if is_active else '#7F8C8D'
+            line_width = 3 if is_active else 1
+            text_weight = "<b>" if is_active else ""
+            text_end = "</b>" if is_active else ""
+            fig_elev.add_trace(go.Scatter(x=[x_min, x_max + 1.5], y=[z, z], mode='lines', line=dict(color=line_color, width=line_width, dash='solid' if is_active else 'dot'), hoverinfo='skip'))
+            marker_x = x_max + 1.5
+            fig_elev.add_trace(go.Scatter(x=[marker_x], y=[z], mode='markers', marker=dict(symbol='triangle-down', size=15, color=line_color, line=dict(width=1, color=line_color)), hoverinfo='skip', showlegend=False))
+            fig_elev.add_trace(go.Scatter(x=[marker_x], y=[z + 0.2], mode='text', text=[f"{text_weight}{label} (+{z:.2f}){text_end}"], textposition="top center", textfont=dict(color=line_color, size=12 if not is_active else 14), hoverinfo='skip', showlegend=False))
+        for x, label in zip(cum_x, grid_labels_x):
+            fig_elev.add_trace(go.Scatter(x=[x, x], y=[-1, max(cum_z)+1], mode='lines', line=dict(color='#BDC3C7', width=1, dash='dash'), showlegend=False, hoverinfo='skip'))
+            fig_elev.add_trace(go.Scatter(x=[x], y=[-1.5], mode='markers+text', marker=dict(size=25, color='white', line=dict(color='black', width=1)), text=label, textposition="middle center", showlegend=False))
+        shapes_elev = []
+        for x in cum_x: shapes_elev.append(dict(type="rect", x0=x-bc_m/2, y0=0, x1=x+bc_m/2, y1=max(cum_z), fillcolor="#BDC3C7", opacity=0.5, line=dict(width=0)))
+        for z in cum_z[1:]:
+            for j in range(len(cum_x)-1): shapes_elev.append(dict(type="rect", x0=cum_x[j], y0=z-0.5, x1=cum_x[j+1], y1=z, fillcolor="#3498DB", opacity=0.5, line=dict(width=0)))
+        fig_elev.update_layout(shapes=shapes_elev, xaxis=dict(visible=False, fixedrange=False, range=[x_min-1, x_max+4]), yaxis=dict(visible=False, scaleanchor="x", fixedrange=False, range=[-2, max(cum_z)+2]), margin=dict(l=10,r=10,t=10,b=10), height=500, dragmode="pan", showlegend=False)
+        st.plotly_chart(fig_elev, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
 
     st.markdown("---")
     
@@ -416,16 +395,19 @@ with tab1:
     st.dataframe(df_found.style.map(color_status, subset=['Trạng thái']), use_container_width=True, hide_index=True, column_config=mong_fmt)
 
 with tab2:
+    # 4. TAB THUYẾT MINH
     st.markdown('<p class="report-title">THUYẾT MINH TÍNH TOÁN KẾT CẤU</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="report-sub">Dự án: {project_name} | Ngày lập: {pd.Timestamp.now().strftime("%d/%m/%Y")}</p>', unsafe_allow_html=True)
     st.markdown("---")
+    
     st.header("I. CÁC TIÊU CHUẨN ÁP DỤNG")
     st.markdown("""
-    * **TCVN 2737:2023:** Tải trọng và tác động.
-    * **TCVN 5574:2018:** Kết cấu bê tông và bê tông cốt thép.
+    * **TCVN 2737:2023:** Tải trọng và tác động - Tiêu chuẩn thiết kế.
+    * **TCVN 5574:2018:** Kết cấu bê tông và bê tông cốt thép - Tiêu chuẩn thiết kế.
     * **TCVN 9386:2012:** Thiết kế công trình chịu động đất.
     * **TCVN 10304:2014:** Móng cọc - Tiêu chuẩn thiết kế.
     """)
+    
     st.header("II. THÔNG SỐ ĐẦU VÀO")
     c1, c2 = st.columns(2)
     with c1:
@@ -436,22 +418,24 @@ with tab2:
     with c2:
         st.subheader("2. Tải Trọng")
         st.markdown(f"- **Tải sàn quy đổi:** $q = {q_load}$ $kN/m^2$")
-        st.caption("(Trọng lượng bản thân + hoàn thiện + tường + hoạt tải)")
-    
+        st.caption("(Bao gồm trọng lượng bản thân, hoàn thiện, tường xây và hoạt tải)")
+
     st.header("III. KẾT QUẢ TÍNH TOÁN SƠ BỘ")
+    
     st.subheader("1. Bản Sàn (Slab)")
-    st.markdown(f"Chiều dày sàn chọn sơ bộ: $h_s = D/m \\cdot L$")
+    st.markdown(f"Chiều dày sàn được chọn theo điều kiện độ võng: $h_s = D/m \\cdot L$")
     st.latex(r"h_{yc} = \frac{L_{min}}{35} = " + f"{hs_calc:.1f} mm")
     st.success(f"👉 **CHỌN: Chiều dày sàn {int(hs_select)} mm**")
     
     st.subheader("2. Dầm Khung (Beam)")
-    st.markdown(f"Chiều cao dầm chính: $h_d = (1/8 \div 1/12)L$")
+    st.markdown(f"Chiều cao dầm chính chọn theo nhịp lớn nhất: $h_d = (1/8 \div 1/12)L$")
     st.latex(r"h_{yc} \approx \frac{L_{max}}{12} = " + f"{hd_calc:.0f} mm")
     st.success(f"👉 **CHỌN: Dầm {int(bd_select)}x{int(hd_select)} mm**")
     
     st.subheader("3. Cột (Column)")
-    st.markdown("Diện tích tiết diện cột sơ bộ:")
+    st.markdown("Tiết diện cột được kiểm tra theo khả năng chịu nén đúng tâm (có kể đến uốn dọc):")
     st.latex(r"A_{yc} = \frac{k \cdot N}{R_b}")
+    st.info(f"Kết quả chi tiết xem bảng tính. Tiết diện điển hình tầng 1: **{df_col.iloc[0]['Tiết diện']} mm**")
     
     st.subheader("4. Móng (Foundation)")
     if found_type == "Móng Cọc (Pile)":
@@ -464,9 +448,9 @@ with tab2:
         st.success(f"👉 **CHỌN: {mong_desc}**")
 
     st.markdown("---")
-    # Export Docx
+    # Generate Word Doc
     mat_info = {'conc': conc_grade, 'rb': rb, 'steel': steel_main, 'rs': rs}
-    docx_file = create_docx_report(project_name, project_type, mat_info, q_load, data_collection, mong_desc)
+    docx_file = create_docx_report(project_name, project_type, mat_info, q_load, data_collection)
     
     st.download_button(
         label="📄 Tải Thuyết Minh (.docx)",
